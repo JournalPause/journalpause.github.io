@@ -101,7 +101,6 @@
   .ready-btn{display:block;width:100%;margin-top:22px;font-size:18px;padding:16px}
   .center{text-align:center;padding:32px 20px}
   .center h1{margin-bottom:10px}
-  .streak{font-size:30px;font-weight:700;color:var(--accent);margin:22px 0 0}
 
   /* links at the bottom of every page */
   .footer-links{display:flex;flex-wrap:wrap;justify-content:center;gap:6px 18px;margin-top:40px;
@@ -204,13 +203,13 @@
     <p class="hint" style="margin:-8px 0 18px">Everything here is optional, and only you can see it.</p>
 
     <div class="card">
-      <label for="hobby-input">Healthy hobbies I'd like to try</label>
+      <label for="hobby-input">Healthy habits I have or would like to try</label>
       <form class="add-row" data-list="hobbies">
         <input id="hobby-input" type="text" enterkeyhint="done" placeholder="e.g. Going for a walk" maxlength="120">
-        <button type="submit" aria-label="Add hobby">Add</button>
+        <button type="submit" aria-label="Add habit">Add</button>
       </form>
-      <p class="hint">Add one hobby at a time. Press enter or tap Add.</p>
-      <ul class="items" id="hobbies-list" aria-label="Your hobbies"></ul>
+      <p class="hint">Add one habit at a time. Press enter or tap Add.</p>
+      <ul class="items" id="hobbies-list" aria-label="Your healthy habits"></ul>
     </div>
 
     <div class="card">
@@ -352,8 +351,7 @@
   <section id="page-thanks" class="page" aria-labelledby="h-thanks">
     <div class="card center">
       <h1 id="h-thanks">Thank you for taking a minute</h1>
-      <p>You may now close this page.</p>
-      <p class="streak" id="streak">Streak 1 🔥</p>
+      <p style="margin:0">You may now close this page.</p>
     </div>
     <div class="pager">
       <button type="button" class="pager-back" data-back>&larr; Back</button>
@@ -851,8 +849,6 @@ $("unlock-form").addEventListener("submit", async (e) => {
 
 /* ---------- page 7: thank you ---------- */
 function showHome(){
-  const day = Math.min(Math.max(interventionDay(), 1), INTERVENTION_DAYS);
-  $("streak").textContent = "Streak " + day + " 🔥";
   show("page-thanks");
 }
 
