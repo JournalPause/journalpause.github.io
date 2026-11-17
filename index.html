@@ -444,6 +444,12 @@ const INTERVENTION_DAYS = 7; // closes at 00:00 on day 8 (phone's local time)
 // Registration is open on Sundays and Mondays only. The journal week always runs
 // Monday (day 1) to Sunday (day 7) and closes at 00:00 on the following Monday.
 const canRegisterToday = () => [0, 1].includes(new Date().getDay()); // Sun, Mon
+
+// RESEARCHER TEST MODE: open the page with ?test on the end of the link
+// (https://journalpause.github.io/?test) and use an ID starting with TEST.
+// It can be registered on any day, and its journal week starts that same day.
+const TEST_LINK = new URLSearchParams(location.search).has("test");
+const isTestId = pid => /^test/i.test(pid);
 function startMonday(){ // Sunday -> tomorrow, Monday -> today
   const d = new Date();
   if(d.getDay() === 0) d.setDate(d.getDate() + 1);
@@ -681,8 +687,9 @@ $("register-form").addEventListener("submit", async (e) => {
 
   btn.disabled = true; btn.textContent = "Setting up…";
   try{
-    if(!canRegisterToday()){ show("page-closed"); return; }
-    const row = { participant_id: pid, week_start: startMonday() };
+    const testing = isTestId(pid) && !canRegisterToday();
+    if(!canRegisterToday() && !testing){ show("page-closed"); return; }
+    const row = { participant_id: pid, week_start: testing ? todayLocal() : startMonday() };
     const res = await registerParticipant(row);
     if(!res.ok){
       err.textContent = res.status === 409
@@ -1139,7 +1146,7 @@ document.addEventListener("visibilitychange", () => {
   }
 
   const auth = getAuth();
-  if(!auth){ show(canRegisterToday() ? "page-register" : "page-closed"); return; }
+  if(!auth){ show(canRegisterToday() || TEST_LINK ? "page-register" : "page-closed"); return; }
   if(interventionOver()){ showEnded(); return; }
   flushQueue();
   recordOpened();
