@@ -445,11 +445,11 @@ const INTERVENTION_DAYS = 7; // closes at 00:00 on day 8 (phone's local time)
 // Monday (day 1) to Sunday (day 7) and closes at 00:00 on the following Monday.
 const canRegisterToday = () => [0, 1].includes(new Date().getDay()); // Sun, Mon
 
-// RESEARCHER TEST MODE: open the page with ?test on the end of the link
-// (https://journalpause.github.io/?test) and use an ID starting with TEST.
-// It can be registered on any day, and its journal week starts that same day.
-const TEST_LINK = new URLSearchParams(location.search).has("test");
-const isTestId = pid => /^test/i.test(pid);
+// DEVELOPER / RESEARCHER ACCESS: participant ID 200202 (or any ID starting
+// with TEST) can register on any day, and its journal week starts that same day.
+// Everyone else can only register on a Sunday or Monday.
+const DEV_IDS = ["200202"];
+const isTestId = pid => DEV_IDS.includes(String(pid).trim()) || /^test/i.test(pid);
 function startMonday(){ // Sunday -> tomorrow, Monday -> today
   const d = new Date();
   if(d.getDay() === 0) d.setDate(d.getDate() + 1);
@@ -1146,7 +1146,7 @@ document.addEventListener("visibilitychange", () => {
   }
 
   const auth = getAuth();
-  if(!auth){ show(canRegisterToday() || TEST_LINK ? "page-register" : "page-closed"); return; }
+  if(!auth){ show("page-register"); return; }
   if(interventionOver()){ showEnded(); return; }
   flushQueue();
   recordOpened();
