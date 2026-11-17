@@ -1,0 +1,1159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!-- Privacy lock: the browser refuses to load or send anything to any other site
+     (no trackers, analytics, fonts, images or scripts from elsewhere).
+     The only places it may send to are Google Apps Script (connect-src), which
+     receives the four researcher fields and writes them to the Google Sheet. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; connect-src https://script.google.com https://script.googleusercontent.com; form-action 'none'; base-uri 'none'">
+<meta name="referrer" content="no-referrer">
+<meta name="color-scheme" content="light dark">
+<title>Pause Journal</title>
+<script>
+  // Apply saved screen mode before the page paints (device-only setting)
+  try{ document.documentElement.dataset.theme = localStorage.getItem("pj_theme") || "system"; }catch(e){}
+</script>
+<style>
+  :root{
+    --bg:#f6f4ef; --card:#ffffff; --ink:#1f2328; --muted:#5b6470;
+    --accent:#3d6b5a; --accent-ink:#ffffff; --line:#e3dfd6; --error:#b3261e;
+    --field:#fbfaf7; --note-bg:#eaf1ed; --note-ink:#2b3b34; --chip:#eef3f0;
+  }
+  :root[data-theme="dark"]{
+    --bg:#15181a; --card:#1e2225; --ink:#e8eaec; --muted:#9aa3ad;
+    --accent:#7fb8a1; --accent-ink:#10231b; --line:#30363b; --error:#f2a39d;
+    --field:#181b1e; --note-bg:#1f2b26; --note-ink:#cfe3da; --chip:#24312b;
+  }
+  @media (prefers-color-scheme: dark){
+    :root[data-theme="system"]{
+      --bg:#15181a; --card:#1e2225; --ink:#e8eaec; --muted:#9aa3ad;
+      --accent:#7fb8a1; --accent-ink:#10231b; --line:#30363b; --error:#f2a39d;
+      --field:#181b1e; --note-bg:#1f2b26; --note-ink:#cfe3da; --chip:#24312b;
+    }
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+       background:var(--bg);color:var(--ink);line-height:1.55;-webkit-text-size-adjust:100%;
+       transition:background .2s,color .2s}
+  main{max-width:560px;margin:0 auto;padding:28px 20px calc(40px + env(safe-area-inset-bottom))}
+  .brand{font-weight:700;color:var(--accent);font-size:15px;margin:0 0 18px;letter-spacing:.02em}
+  .page{display:none}
+  .page.active{display:block}
+  .step{font-size:13px;color:var(--muted);letter-spacing:.04em;text-transform:uppercase;margin:0 0 6px}
+  h1{font-size:26px;margin:0 0 18px;line-height:1.2}
+  h2{font-size:17px;margin:26px 0 6px}
+  p{margin:0 0 12px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px}
+  .card + .card{margin-top:16px}
+  label{display:block;font-weight:600;font-size:15px;margin:16px 0 6px}
+  label:first-child{margin-top:0}
+  .hint{font-size:13px;color:var(--muted);margin:4px 0 0}
+  input[type=text],input[type=password],textarea{
+    width:100%;font:inherit;font-size:17px;padding:13px 14px;border:1px solid var(--line);
+    border-radius:10px;background:var(--field);color:var(--ink)}
+  textarea{min-height:130px;resize:vertical}
+  input:focus,textarea:focus{outline:2px solid var(--accent);outline-offset:1px;border-color:transparent}
+  .check{display:flex;align-items:center;gap:10px;margin-top:18px}
+  .check input{width:22px;height:22px;accent-color:var(--accent);margin:0}
+  .check label{margin:0;font-weight:500}
+  .error{color:var(--error);font-size:14px;margin-top:12px;min-height:1em}
+  .note{margin-top:22px;padding:16px;border-radius:12px;background:var(--note-bg);font-size:14px;color:var(--note-ink)}
+  .note p:last-child{margin:0}
+  .nav{display:flex;gap:12px;margin-top:28px}
+  button{font:inherit;font-size:17px;font-weight:600;padding:14px;border-radius:12px;border:0;cursor:pointer}
+  .nav button{flex:1}
+  .primary{background:var(--accent);color:var(--accent-ink)}
+  .secondary{background:transparent;color:var(--accent);border:1.5px solid var(--accent)}
+  button:disabled{opacity:.5;cursor:default}
+  .contact{margin-top:18px;font-size:15px}
+  .contact a{color:var(--accent)}
+
+  /* add-item rows */
+  .add-row{display:flex;gap:8px}
+  .add-row input{flex:1;min-width:0}
+  .add-row button{padding:0 18px;background:var(--accent);color:var(--accent-ink)}
+  .items{list-style:none;padding:0;margin:12px 0 0;display:flex;flex-wrap:wrap;gap:8px}
+  .items:empty{display:none}
+  .items li{display:flex;align-items:center;gap:6px;background:var(--chip);border:1px solid var(--line);
+            border-radius:999px;padding:6px 6px 6px 14px;font-size:15px;max-width:100%}
+  .items li span{overflow-wrap:anywhere}
+  .items li button{background:transparent;color:var(--muted);padding:2px 8px;font-size:18px;line-height:1;border-radius:999px}
+
+  /* screen mode segmented control */
+  .seg{display:flex;background:var(--field);border:1px solid var(--line);border-radius:12px;padding:4px;gap:4px}
+  .seg input{position:absolute;opacity:0;pointer-events:none}
+  .seg label{flex:1;margin:0;text-align:center;padding:10px 4px;border-radius:9px;font-weight:500;cursor:pointer;font-size:15px}
+  .seg input:checked + label{background:var(--accent);color:var(--accent-ink);font-weight:600}
+  .seg input:focus-visible + label{outline:2px solid var(--accent);outline-offset:2px}
+
+  /* intention slider */
+  .big-value{display:block;text-align:center;font-size:44px;font-weight:700;color:var(--accent);
+             font-variant-numeric:tabular-nums;margin-bottom:14px;line-height:1.1}
+  input[type=range]{width:100%;height:36px;margin:0;accent-color:var(--accent);cursor:pointer}
+  /* reason options */
+  .opts{display:flex;flex-wrap:wrap;gap:8px}
+  .opts button{font-size:15px;font-weight:500;padding:10px 14px;border-radius:999px;
+               background:var(--field);color:var(--ink);border:1px solid var(--line)}
+  .opts button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600}
+
+  .ready-btn{display:block;width:100%;margin-top:22px;font-size:18px;padding:16px}
+  .center{text-align:center;padding:32px 20px}
+  .center h1{margin-bottom:10px}
+  .streak{font-size:30px;font-weight:700;color:var(--accent);margin:22px 0 0}
+
+  /* links at the bottom of every page */
+  .footer-links{display:flex;flex-wrap:wrap;justify-content:center;gap:6px 18px;margin-top:40px;
+                padding-top:18px;border-top:1px solid var(--line)}
+  .footer-links button{background:none;padding:6px 2px;font-size:14px;font-weight:500;color:var(--muted);
+                       text-decoration:underline;text-underline-offset:3px}
+  .footer-links button[aria-current="page"]{color:var(--accent);font-weight:700;text-decoration:none}
+
+  /* back / next row */
+  .pager{display:flex;justify-content:space-between;gap:12px;margin-top:22px;padding-top:14px;border-top:1px solid var(--line)}
+  .pager button{flex:0 0 auto;background:none;color:var(--accent);font-size:16px;font-weight:600;padding:10px 4px}
+  .pager button:disabled{color:var(--muted);opacity:.45}
+
+  /* support services box */
+  .support{background:var(--note-bg);color:var(--note-ink);border-radius:12px;padding:16px;margin:0 0 22px;font-size:15px}
+  .support p{margin:0 0 8px}
+  .support ul{margin:0;padding-left:18px}
+  .support li{margin:4px 0}
+  .support a{color:inherit;font-weight:700;text-underline-offset:3px}
+
+  /* reflective question */
+  h1.question{font-size:22px;font-weight:600;line-height:1.4}
+  .link-btn{background:none;color:var(--accent);padding:12px 0 0;font-size:15px;font-weight:600;text-decoration:underline;text-underline-offset:3px}
+  .visually-hidden{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+  .range-scale{display:flex;justify-content:space-between;font-size:13px;color:var(--muted);margin-top:2px}
+</style>
+</head>
+<body>
+<main>
+  <p class="brand">Pause Journal</p>
+
+  <!-- ============ PAGE 1: REGISTER ============ -->
+  <section id="page-register" class="page active" aria-labelledby="h-register">
+    <p class="step">Step 1 of 3</p>
+    <h1 id="h-register">Create your Pause Journal</h1>
+
+    <form id="register-form" class="card" novalidate>
+      <label for="pid">Participant username</label>
+      <input id="pid" type="text" autocomplete="username" autocapitalize="off" spellcheck="false" required>
+      <p class="hint">Use the username Qualtrics gave you. It was also sent to your email.</p>
+
+      <label for="pass">Choose a passcode</label>
+      <input id="pass" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="new-password" required>
+      <p class="hint">4 to 6 digits. Only you will know it. If you forget it, contact the researcher, who can reset your registration so you can set up your journal again.</p>
+
+      <label for="pass2">Confirm passcode</label>
+      <input id="pass2" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="new-password" required>
+
+      <div class="check">
+        <input id="remember" type="checkbox">
+        <label for="remember">Remember this device</label>
+      </div>
+
+      <p id="reg-error" class="error" role="alert"></p>
+
+      <div class="nav">
+        <button type="submit" class="primary" id="reg-btn">Next</button>
+      </div>
+    </form>
+
+    <div class="note">
+      <p><strong>No one can see your answers and your interactions with the journal, not even the researchers.</strong> The page has been designed with your privacy in mind.</p>
+      <p>The researchers will be able to see your participant number, whether you've successfully registered, how many days of the week the journal was triggered, and your starting week date.</p>
+    </div>
+  </section>
+
+  <!-- ============ PAGE 2: ABOUT ============ -->
+  <section id="page-about" class="page" aria-labelledby="h-about">
+    <p class="step">Step 2 of 3</p>
+    <h1 id="h-about">About this journal</h1>
+
+    <div class="card">
+      <h2 style="margin-top:0">What this page is for</h2>
+      <p>This journal webpage was created as part of a screen time intervention study, meant to provide you a space where you can occasionally reflect on your smartphone use.</p>
+
+      <h2>What can the researcher see?</h2>
+      <p>The researcher will be able to see your user number, whether you finished setting up the journal, the Monday your journal week started, and on how many of the 7 days you opened it (a number from 0 to 7). This is compared with the Screen Time you report in Qualtrics.</p>
+      <p>The research team will not be able to see what you write or choose here: your dashboard, intentions, reasons, reflections and settings. They are locked with your passcode, so nobody else can read them, not even the research team.</p>
+
+      <h2>How long is my journal kept?</h2>
+      <p>Your journal is kept until 26 January 2027, and is then permanently deleted.</p>
+
+      <p>Every question in this journal is optional, and you can skip any of them. Remember, you can reach out to the researcher if you have questions about the study or if you want to withdraw from it.</p>
+
+      <p class="contact"><strong>Contact:</strong> Pratiksha Sapkota<br>
+        <strong>Email:</strong> <a href="mailto:40662842@live.napier.ac.uk">40662842@live.napier.ac.uk</a></p>
+    </div>
+
+    <div class="nav">
+      <button type="button" class="secondary" id="about-back">Back</button>
+      <button type="button" class="primary" id="about-next">Next</button>
+    </div>
+  </section>
+
+  <!-- ============ PAGE 3: DASHBOARD SETUP ============ -->
+  <section id="page-setup" class="page" aria-labelledby="h-setup">
+    <p class="step">Step 3 of 3</p>
+    <h1 id="h-setup">Set up your dashboard</h1>
+    <p class="hint" style="margin:-8px 0 18px">Everything here is optional, and only you can see it.</p>
+
+    <div class="card">
+      <label for="hobby-input">Healthy hobbies I'd like to try</label>
+      <form class="add-row" data-list="hobbies">
+        <input id="hobby-input" type="text" enterkeyhint="done" placeholder="e.g. Going for a walk" maxlength="120">
+        <button type="submit" aria-label="Add hobby">Add</button>
+      </form>
+      <p class="hint">Add one hobby at a time. Press enter or tap Add.</p>
+      <ul class="items" id="hobbies-list" aria-label="Your hobbies"></ul>
+    </div>
+
+    <div class="card">
+      <label for="goal-input">Goals I am working towards</label>
+      <form class="add-row" data-list="goals">
+        <input id="goal-input" type="text" enterkeyhint="done" placeholder="e.g. Read before bed" maxlength="160">
+        <button type="submit" aria-label="Add goal">Add</button>
+      </form>
+      <p class="hint">Add one goal at a time. Press enter or tap Add.</p>
+      <ul class="items" id="goals-list" aria-label="Your goals"></ul>
+    </div>
+
+    <div class="card">
+      <label for="why">Why I want to spend less time on my phone</label>
+      <textarea id="why" placeholder="In your own words…" maxlength="2000"></textarea>
+    </div>
+
+    <div class="card">
+      <label id="mode-label">Screen mode</label>
+      <div class="seg" role="radiogroup" aria-labelledby="mode-label">
+        <input type="radio" name="theme" id="t-light" value="light"><label for="t-light">Light</label>
+        <input type="radio" name="theme" id="t-dark" value="dark"><label for="t-dark">Dark</label>
+        <input type="radio" name="theme" id="t-system" value="system"><label for="t-system">Match phone</label>
+      </div>
+    </div>
+
+    <p id="setup-error" class="error" role="alert"></p>
+
+    <div class="nav">
+      <button type="button" class="primary" id="setup-save">Save and continue</button>
+    </div>
+    <div class="pager">
+      <button type="button" class="pager-back" data-back>&larr; Back</button>
+      <button type="button" class="pager-next" id="setup-next-pg">Next &rarr;</button>
+    </div>
+  </section>
+
+  <!-- ============ PAGE 4: DAILY INTENTION ============ -->
+  <section id="page-intention" class="page" aria-labelledby="h-intention">
+    <p class="step" id="intention-date"></p>
+    <h1 id="h-intention">Set your intention for today</h1>
+
+    <div class="card">
+      <label for="intent-slider">Roughly how long do you intend to spend on distracting apps today, in total?</label>
+      <p class="hint" style="margin:0 0 18px">Slide to choose.</p>
+
+      <output id="intent-value" for="intent-slider" class="big-value">0h 00m</output>
+      <input id="intent-slider" type="range" min="0" max="600" step="15" value="0"
+             aria-describedby="intent-value">
+      <div class="range-scale" aria-hidden="true"><span>0h</span><span>5h</span><span>10h</span></div>
+    </div>
+
+    <div class="nav">
+      <button type="button" class="secondary" id="intent-skip">Skip for today</button>
+      <button type="button" class="primary" id="intent-set">Set my intention</button>
+    </div>
+    <div class="pager">
+      <button type="button" class="pager-back" data-back>&larr; Back</button>
+      <button type="button" class="pager-next" id="intent-next-pg">Next &rarr;</button>
+    </div>
+  </section>
+
+  <!-- ============ PAGE 5: WHAT MADE YOU OPEN THE APP ============ -->
+  <section id="page-reason" class="page" aria-labelledby="h-reason">
+    <h1 id="h-reason">What made you open a distracting app?</h1>
+
+    <div class="card">
+      <label for="reason-text">Type your answer</label>
+      <input id="reason-text" type="text" enterkeyhint="done" maxlength="300" placeholder="In your own words…">
+
+      <p class="hint" style="margin:18px 0 10px" id="reason-opts-label">Or select from the options below</p>
+      <div class="opts" id="reason-opts" role="group" aria-labelledby="reason-opts-label"></div>
+    </div>
+
+    <div class="nav">
+      <button type="button" class="secondary" id="reason-skip">Skip</button>
+      <button type="button" class="primary" id="reason-done">Done</button>
+    </div>
+    <div class="pager">
+      <button type="button" class="pager-back" data-back>&larr; Back</button>
+      <button type="button" class="pager-next" id="reason-next-pg">Next &rarr;</button>
+    </div>
+  </section>
+
+  <!-- ============ PAGE 6: REFLECTIVE QUESTION ============ -->
+  <section id="page-reflect" class="page" aria-labelledby="h-reflect">
+    <div class="support" id="support-box" hidden role="note">
+      <p>If you are struggling or would like to talk to someone, these free services are there to help:</p>
+      <ul>
+        <li><strong>Samaritans:</strong> call <a href="tel:116123">116 123</a>, any time, day or night</li>
+        <li><strong>Shout:</strong> text SHOUT to <a href="sms:85258?&amp;body=SHOUT">85258</a></li>
+        <li><strong>NHS:</strong> call <a href="tel:111">111</a> for urgent advice, or <a href="tel:999">999</a> in an emergency</li>
+      </ul>
+    </div>
+    <p class="step">A question for you</p>
+    <h1 id="h-reflect" class="question"></h1>
+
+    <div class="card">
+      <label for="reflect-answer" class="visually-hidden">Your answer</label>
+      <textarea id="reflect-answer" placeholder="Type as little or as much as you want…" maxlength="3000"></textarea>
+      <button type="button" class="link-btn" id="reflect-another">Show me a different question</button>
+    </div>
+    <button type="button" class="primary ready-btn" id="reflect-ready">I'm ready to go 🚀</button>
+
+    <div class="nav">
+      <button type="button" class="secondary" id="reflect-skip">Skip</button>
+      <button type="button" class="primary" id="reflect-done">Done</button>
+    </div>
+    <div class="pager">
+      <button type="button" class="pager-back" data-back>&larr; Back</button>
+      <button type="button" class="pager-next" id="reflect-next-pg">Next &rarr;</button>
+    </div>
+  </section>
+
+  <!-- ============ UNLOCK ============ -->
+  <section id="page-unlock" class="page" aria-labelledby="h-unlock">
+    <h1 id="h-unlock">Welcome back</h1>
+    <form id="unlock-form" class="card" novalidate>
+      <label for="unlock-pass">Enter your passcode</label>
+      <input id="unlock-pass" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="current-password" required>
+      <p class="hint" id="unlock-user"></p>
+
+      <div class="check">
+        <input id="unlock-remember" type="checkbox">
+        <label for="unlock-remember">Remember this device</label>
+      </div>
+
+      <p id="unlock-error" class="error" role="alert"></p>
+      <div class="nav">
+        <button type="submit" class="primary" id="unlock-btn">Unlock</button>
+      </div>
+    </form>
+    <p class="hint" style="margin-top:16px">Forgot your passcode? Contact the researcher at
+      <a href="mailto:40662842@live.napier.ac.uk" style="color:var(--accent)">40662842@live.napier.ac.uk</a>.
+      They can reset your registration so you can set up your journal again. Your previous entries can't be recovered.</p>
+  </section>
+
+  <!-- ============ PAGE 7: THANK YOU (last page) ============ -->
+  <section id="page-thanks" class="page" aria-labelledby="h-thanks">
+    <div class="card center">
+      <h1 id="h-thanks">Thank you for taking a minute</h1>
+      <p>You may now close this page.</p>
+      <p class="streak" id="streak">Streak 1 🔥</p>
+    </div>
+    <div class="pager">
+      <button type="button" class="pager-back" data-back>&larr; Back</button>
+      <button type="button" class="pager-next" id="thanks-next-pg" disabled>Next &rarr;</button>
+    </div>
+  </section>
+
+  <!-- ============ REGISTRATION CLOSED (Tuesday to Saturday) ============ -->
+  <section id="page-closed" class="page" aria-labelledby="h-closed">
+    <div class="card">
+      <h1 id="h-closed">Registration opens on Sunday</h1>
+      <p>So that everyone's journal week starts on a Monday, you can set up your Pause Journal on a <strong>Sunday or Monday</strong> only.</p>
+      <p>Please come back on Sunday or Monday to set it up.</p>
+      <p style="margin:0">If you have any questions, you can email the researcher at
+        <a href="mailto:40662842@live.napier.ac.uk" style="color:var(--accent)">40662842@live.napier.ac.uk</a>.</p>
+    </div>
+  </section>
+
+  <!-- ============ BEFORE MONDAY (set up on a Sunday) ============ -->
+  <section id="page-prestart" class="page" aria-labelledby="h-prestart">
+    <div class="card center">
+      <h1 id="h-prestart">You're all set</h1>
+      <p id="prestart-date">Your journal week starts on Monday.</p>
+      <p style="margin:0">You may now close this page.</p>
+    </div>
+  </section>
+
+  <!-- ============ INTERVENTION ENDED (from 00:00 on day 8) ============ -->
+  <section id="page-ended" class="page" aria-labelledby="h-ended">
+    <div class="card">
+      <h1 id="h-ended">The intervention week has now ended</h1>
+      <p>It is hoped that this page made your smartphone use a little more intentional.</p>
+      <p><strong>Remember to take part in the final Qualtrics survey, where you'll be asked to upload your Screen Time record for this intervention week. A link has been sent to your email.</strong></p>
+      <p style="margin:0">To contact the researcher you can email
+        <a href="mailto:40662842@live.napier.ac.uk" style="color:var(--accent)">40662842@live.napier.ac.uk</a>.</p>
+    </div>
+  </section>
+
+  <!-- ============ CONTACT (from footer) ============ -->
+  <section id="page-contact" class="page info-page" aria-labelledby="h-contact">
+    <h1 id="h-contact">Contact the researcher</h1>
+    <div class="card">
+      <p>If you have questions about the study, or if you want to withdraw from it, you can contact the researcher.</p>
+      <p class="contact" style="margin:0"><strong>Researcher:</strong> Pratiksha Sapkota<br>
+        <strong>Email:</strong> <a href="mailto:40662842@live.napier.ac.uk">40662842@live.napier.ac.uk</a></p>
+    </div>
+    <div class="pager">
+      <button type="button" class="pager-back" data-info-back>&larr; Back</button>
+      <button type="button" class="pager-next" data-info-back>Next &rarr;</button>
+    </div>
+  </section>
+
+  <!-- ============ EMOTIONAL SUPPORT (from footer) ============ -->
+  <section id="page-support" class="page info-page" aria-labelledby="h-support">
+    <h1 id="h-support">Emotional support</h1>
+    <div class="support" style="margin:0">
+      <p>If you are struggling or would like to talk to someone, these free services are there to help:</p>
+      <ul>
+        <li><strong>Samaritans:</strong> call <a href="tel:116123">116 123</a>, any time, day or night</li>
+        <li><strong>Shout:</strong> text SHOUT to <a href="sms:85258?&amp;body=SHOUT">85258</a></li>
+        <li><strong>NHS:</strong> call <a href="tel:111">111</a> for urgent advice, or <a href="tel:999">999</a> in an emergency</li>
+      </ul>
+    </div>
+    <div class="pager">
+      <button type="button" class="pager-back" data-info-back>&larr; Back</button>
+      <button type="button" class="pager-next" data-info-back>Next &rarr;</button>
+    </div>
+  </section>
+
+  <!-- ============ LINKS AT THE BOTTOM OF EVERY PAGE ============ -->
+  <nav class="footer-links" aria-label="Help and information">
+    <button type="button" data-info="page-about">About this study</button>
+    <button type="button" data-info="page-contact">Contact the researcher</button>
+    <button type="button" data-info="page-support">Emotional support</button>
+  </nav>
+</main>
+
+<script>
+/* ================= CONFIG =================
+   API_URL: your backend endpoint that stores the researcher-visible data.
+   Leave empty to run in local demo mode (saves to this browser only).
+   DELETE_AFTER: journal data on the phone is wiped on/after this date.
+*/
+const API_URL = "https://script.google.com/macros/s/AKfycbwGFLdVg-HxD_QcxLWEKSsoiTWFq4aqa44BVbxmgn6x6mzCpU2OKt9_0PYN0MM2tfITig/exec"; // Google Apps Script web app (project account)
+const DELETE_AFTER = "2027-01-26";
+const INTERVENTION_DAYS = 7; // closes at 00:00 on day 8 (phone's local time)
+
+// Registration is open on Sundays and Mondays only. The journal week always runs
+// Monday (day 1) to Sunday (day 7) and closes at 00:00 on the following Monday.
+const canRegisterToday = () => [0, 1].includes(new Date().getDay()); // Sun, Mon
+function startMonday(){ // Sunday -> tomorrow, Monday -> today
+  const d = new Date();
+  if(d.getDay() === 0) d.setDate(d.getDate() + 1);
+  const pad = n => String(n).padStart(2,"0");
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+}
+const beforeStart = () => getAuth() && interventionDay() < 1;
+function showPrestart(){
+  const [y, m, d] = getAuth().week_start.split("-").map(Number);
+  $("prestart-date").textContent = "Your journal week starts on " +
+    new Date(y, m - 1, d).toLocaleDateString("en-GB", {weekday:"long", day:"numeric", month:"long"}) + ".";
+  show("page-prestart");
+}
+
+// Day of the intervention: the start Monday = day 1
+function interventionDay(){
+  const auth = getAuth();
+  if(!auth || !auth.week_start) return 1;
+  const [y, m, d] = auth.week_start.split("-").map(Number);
+  const start = new Date(y, m - 1, d);
+  const now = new Date(); const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  return Math.round((today - start) / 86400000) + 1;
+}
+const interventionOver = () => getAuth() && interventionDay() > INTERVENTION_DAYS;
+function showEnded(){
+  navStack = []; infoReturn = null; markFooter("page-ended");
+  document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
+  $("page-ended").classList.add("active");
+  window.scrollTo(0,0);
+}
+
+/* ---------- helpers ---------- */
+const $ = id => document.getElementById(id);
+// Page history for the Back buttons. The unlock screen starts a fresh history.
+let navStack = [];
+function show(id, fromBack){
+  if(id !== "page-register" && id !== "page-about" && interventionOver()) return showEnded();
+  infoReturn = null;
+  if(id === "page-unlock") navStack = [];
+  else if(!fromBack && navStack[navStack.length - 1] !== id) navStack.push(id);
+  document.querySelectorAll("[data-back]").forEach(b => b.disabled = navStack.length < 2);
+  document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
+  $(id).classList.add("active");
+  markFooter(id);
+  window.scrollTo(0,0);
+}
+
+/* ---------- About / Contact / Emotional support links ----------
+   These open from any page; Back (or Next) returns to exactly where the
+   participant was, with anything they had typed still there.
+*/
+let infoReturn = null;
+function markFooter(id){
+  document.querySelectorAll(".footer-links button").forEach(b =>
+    b.toggleAttribute("aria-current", b.dataset.info === id && infoReturn !== null));
+  document.querySelectorAll(".footer-links button[aria-current]").forEach(b => b.setAttribute("aria-current","page"));
+}
+function showInfo(id){
+  const current = document.querySelector(".page.active");
+  if(infoReturn === null) infoReturn = current ? current.id : "page-register";
+  document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
+  $(id).classList.add("active");
+  markFooter(id);
+  window.scrollTo(0,0);
+}
+function returnFromInfo(){
+  const target = infoReturn; infoReturn = null;
+  if(target === "page-ended") return showEnded();
+  if(!target || target === "page-contact" || target === "page-support") return show("page-register", true);
+  show(target, true);
+}
+
+function todayLocal(){
+  const d = new Date(), pad = n => String(n).padStart(2,"0");
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+}
+
+const enc = new TextEncoder(), dec = new TextDecoder();
+const toB64 = buf => btoa(String.fromCharCode(...new Uint8Array(buf)));
+const fromB64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+
+async function pbkdf2(pass, salt, usage){
+  const base = await crypto.subtle.importKey("raw", enc.encode(pass), "PBKDF2", false, ["deriveBits"]);
+  const params = {name:"PBKDF2", salt:enc.encode(salt), iterations:200000, hash:"SHA-256"};
+  return toB64(await crypto.subtle.deriveBits(params, base, 256)); // "hash" or raw key bytes
+}
+const importKey = b64 =>
+  crypto.subtle.importKey("raw", fromB64(b64), {name:"AES-GCM"}, false, ["encrypt","decrypt"]);
+
+/* ---------- "Remember this device" ----------
+   Keeps the unlock key in this browser's storage on this phone only (never sent
+   anywhere), so the journal opens without the passcode. Unticked = passcode every time.
+*/
+let journalKeyRaw = null;
+function rememberKey(){ if(journalKeyRaw) localStorage.setItem("pj_key", journalKeyRaw); }
+async function recallKey(){
+  const raw = localStorage.getItem("pj_key");
+  if(!raw) return null;
+  try{ journalKeyRaw = raw; return await importKey(raw); }catch(e){ return null; }
+}
+function forgetKey(){ localStorage.removeItem("pj_key"); }
+
+/* ---------- encrypted journal storage ---------- */
+let journalKey = null;
+
+async function saveEncrypted(data){
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = await crypto.subtle.encrypt({name:"AES-GCM", iv}, journalKey, enc.encode(JSON.stringify(data)));
+  localStorage.setItem("pj_data", JSON.stringify({iv:toB64(iv), ct:toB64(ct)}));
+}
+async function loadEncrypted(){
+  const raw = localStorage.getItem("pj_data");
+  if(!raw) return null;
+  const {iv, ct} = JSON.parse(raw);
+  const pt = await crypto.subtle.decrypt({name:"AES-GCM", iv:fromB64(iv)}, journalKey, fromB64(ct));
+  return JSON.parse(dec.decode(pt));
+}
+
+function getAuth(){
+  try{ return JSON.parse(localStorage.getItem("pj_auth")); }catch(e){ return null; }
+}
+
+/* ---------- researcher data ----------
+   The ONLY things that ever leave the phone. Nothing written or chosen in the
+   journal (setup answers, intentions, reasons, reflections, settings, which
+   questions were shown or skipped, times) is ever sent: it stays encrypted on the phone.
+
+   Messages sent to API_URL (POST, JSON):
+     {action:"register",   participant_id, week_start}  -> new row: setup_done = no, days_opened = 0
+     {action:"setup_done", participant_id}              -> setup_done = yes
+     {action:"days_opened",participant_id, days_opened} -> running total 0-7 (overwrite the cell)
+   The researcher's sheet then holds: participant_id | week_start | setup_done | days_opened (0-7)
+   "register" must be refused (HTTP 409) if the participant_id already has a row.
+   Deleting the row lets the participant register again.
+*/
+function demoDb(update){
+  const all = JSON.parse(localStorage.getItem("demo_registrations") || "{}");
+  const result = update(all);
+  localStorage.setItem("demo_registrations", JSON.stringify(all));
+  return result;
+}
+async function post(msg){
+  if(!API_URL){
+    return demoDb(all => {
+      const row = all[msg.participant_id];
+      if(msg.action === "register"){
+        if(row) return {ok:false, status:409};
+        all[msg.participant_id] = {participant_id: msg.participant_id, week_start: msg.week_start,
+                                   setup_done: "no", days_opened: 0};
+      }else if(row && msg.action === "setup_done"){
+        row.setup_done = "yes";
+      }else if(row && msg.action === "days_opened"){
+        row.days_opened = Math.max(row.days_opened, msg.days_opened);
+      }
+      return {ok:true};
+    });
+  }
+  // Google Apps Script always answers HTTP 200, with the real result in the body
+  const res = await fetch(API_URL, {method:"POST", headers:{"Content-Type":"text/plain;charset=utf-8"},
+                                    body:JSON.stringify(msg), redirect:"follow", credentials:"omit"});
+  let body; try{ body = await res.json(); }catch(e){ return {ok:false, status:503}; }
+  return {ok:!!body.ok, status: body.ok ? 200 : (body.status || 500)};
+}
+const registerParticipant = row => post({action:"register", participant_id: row.participant_id, week_start: row.week_start});
+
+// setup_done / opened are queued on the phone and re-sent if there is no signal
+function queue(msg){
+  const box = JSON.parse(localStorage.getItem("pj_outbox") || "[]");
+  box.push(msg);
+  localStorage.setItem("pj_outbox", JSON.stringify(box));
+  flushQueue();
+}
+let flushing = false;
+async function flushQueue(){
+  if(flushing) return; flushing = true;
+  try{
+    let box = JSON.parse(localStorage.getItem("pj_outbox") || "[]");
+    while(box.length){
+      try{ const r = await post(box[0]); if(!r.ok && r.status >= 500) break; }catch(e){ break; }
+      box.shift(); localStorage.setItem("pj_outbox", JSON.stringify(box));
+    }
+  }finally{ flushing = false; }
+}
+// Count today as a "triggered" day (once per day, Monday-Sunday of the journal week)
+function recordOpened(){
+  const auth = getAuth(), day = interventionDay();
+  if(!auth || day < 1 || day > INTERVENTION_DAYS) return;
+  const sent = JSON.parse(localStorage.getItem("pj_days") || "[]");
+  if(sent.includes(day)) return;
+  sent.push(day); localStorage.setItem("pj_days", JSON.stringify(sent));
+  queue({action:"days_opened", participant_id: auth.pid, days_opened: sent.length});
+}
+function recordSetupDone(){
+  const auth = getAuth();
+  if(!auth || localStorage.getItem("pj_setup_sent")) return;
+  localStorage.setItem("pj_setup_sent", "1");
+  queue({action:"setup_done", participant_id: auth.pid});
+}
+
+/* ---------- routing after unlock ---------- */
+let journal = null; // decrypted journal, in memory only
+
+async function routeUnlocked(){
+  try{ journal = await loadEncrypted(); }catch(e){ journal = null; }
+  if(journal){ fillSetup(journal); goToday(); }
+  else show("page-setup");
+}
+
+// Every time the page is opened (by the Shortcut) it is a "check-in", including the first
+// time: [setup, first time only] -> intention (once a day) -> what made you open the app
+// -> reflective question -> thank you.
+let checkIn = true;
+
+function goToday(){
+  if(beforeStart()) return showPrestart();
+  const today = todayLocal();
+  if(!(journal.intentions && journal.intentions[today])) showIntention();
+  else if(checkIn) showReason();
+  else showHome(journal);
+}
+
+/* ---------- page 1: register ---------- */
+$("register-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const err = $("reg-error"), btn = $("reg-btn");
+  const pid = $("pid").value.trim();
+  const pass = $("pass").value, pass2 = $("pass2").value;
+  const remember = $("remember").checked;
+  err.textContent = "";
+
+  if(journalKey && getAuth()){ show("page-about"); return; }
+  if(!pid) return err.textContent = "Please enter your participant username.";
+  if(!/^\d{4,6}$/.test(pass)) return err.textContent = "Your passcode needs to be 4 to 6 digits.";
+  if(pass !== pass2) return err.textContent = "The passcodes don't match.";
+
+  btn.disabled = true; btn.textContent = "Setting up…";
+  try{
+    if(!canRegisterToday()){ show("page-closed"); return; }
+    const row = { participant_id: pid, week_start: startMonday() };
+    const res = await registerParticipant(row);
+    if(!res.ok){
+      err.textContent = res.status === 409
+        ? "This username is already registered. Please contact the researcher if you need to set it up again."
+        : "Something went wrong. Please try again.";
+      return;
+    }
+
+    const salt = toB64(crypto.getRandomValues(new Uint8Array(16)));
+    const hash = await pbkdf2(pass, salt + ":auth", "hash");
+    journalKeyRaw = await pbkdf2(pass, salt + ":data");
+    journalKey = await importKey(journalKeyRaw);
+
+    localStorage.removeItem("pj_data");
+    ["pj_days","pj_setup_sent","pj_outbox"].forEach(k => localStorage.removeItem(k));
+    localStorage.setItem("pj_auth", JSON.stringify({pid, salt, hash, week_start: row.week_start}));
+    recordOpened(); // registering on the Monday counts as that day's first trigger
+    if(remember) rememberKey(); else forgetKey();
+
+    $("pass").value = ""; $("pass2").value = "";
+    show("page-about");
+  }catch(ex){
+    err.textContent = "Couldn't connect. Check your internet and try again.";
+  }finally{
+    btn.disabled = false; btn.textContent = "Next";
+  }
+});
+
+/* ---------- page 2: about ---------- */
+function goBack(){
+  if(navStack.length < 2) return;
+  navStack.pop();
+  const prev = navStack[navStack.length - 1];
+  if(prev === "page-reflect") showReflection(true);
+  else show(prev, true);
+}
+document.querySelectorAll("[data-back]").forEach(b => b.addEventListener("click", goBack));
+$("about-back").addEventListener("click", () => infoReturn !== null ? returnFromInfo() : goBack());
+$("about-next").addEventListener("click", () => infoReturn !== null ? returnFromInfo() : show("page-setup"));
+document.querySelectorAll("[data-info]").forEach(b => b.addEventListener("click", () => showInfo(b.dataset.info)));
+document.querySelectorAll("[data-info-back]").forEach(b => b.addEventListener("click", returnFromInfo));
+
+/* ---------- page 3: dashboard setup ---------- */
+const lists = { hobbies: [], goals: [] };
+
+function renderList(name){
+  const ul = $(name + "-list");
+  ul.innerHTML = "";
+  lists[name].forEach((text, i) => {
+    const li = document.createElement("li");
+    const span = document.createElement("span");
+    span.textContent = text;
+    const rm = document.createElement("button");
+    rm.type = "button";
+    rm.textContent = "×";
+    rm.setAttribute("aria-label", "Remove " + text);
+    rm.addEventListener("click", () => { lists[name].splice(i, 1); renderList(name); });
+    li.append(span, rm);
+    ul.appendChild(li);
+  });
+}
+
+document.querySelectorAll(".add-row").forEach(form => {
+  form.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const input = form.querySelector("input");
+    const value = input.value.trim();
+    if(!value) return;
+    lists[form.dataset.list].push(value);
+    renderList(form.dataset.list);
+    input.value = "";
+    input.focus();
+  });
+});
+
+function setTheme(value){
+  document.documentElement.dataset.theme = value;
+  const radio = $("t-" + value);
+  if(radio) radio.checked = true;
+  try{ localStorage.setItem("pj_theme", value); }catch(e){}
+}
+setTheme(document.documentElement.dataset.theme || "system");
+document.querySelectorAll('input[name="theme"]').forEach(r => {
+  r.addEventListener("change", () => setTheme(r.value));
+});
+
+function fillSetup(data){
+  lists.hobbies = [...(data.hobbies || [])];
+  lists.goals = [...(data.goals || [])];
+  renderList("hobbies"); renderList("goals");
+  $("why").value = data.why || "";
+  if(data.theme) setTheme(data.theme);
+}
+
+$("setup-save").addEventListener("click", async () => {
+  const err = $("setup-error"), btn = $("setup-save");
+  err.textContent = "";
+
+  // Catch anything typed but not yet added
+  document.querySelectorAll(".add-row").forEach(f => {
+    const input = f.querySelector("input"), v = input.value.trim();
+    if(v){ lists[f.dataset.list].push(v); input.value = ""; renderList(f.dataset.list); }
+  });
+
+  if(!journalKey){ show("page-unlock"); return; }
+
+  btn.disabled = true; btn.textContent = "Saving…";
+  try{
+    journal = Object.assign(journal || {intentions:{}}, {
+      hobbies: lists.hobbies,
+      goals: lists.goals,
+      why: $("why").value.trim(),
+      theme: document.querySelector('input[name="theme"]:checked').value,
+      updated: new Date().toISOString()
+    });
+    await saveEncrypted(journal);
+    recordSetupDone();
+    goToday();
+  }catch(ex){
+    err.textContent = "Couldn't save. Please try again.";
+  }finally{
+    btn.disabled = false; btn.textContent = "Save and continue";
+  }
+});
+
+/* ---------- unlock ---------- */
+function showUnlock(){
+  const auth = getAuth();
+  $("unlock-user").textContent = auth ? "Signed in as " + auth.pid : "";
+  $("unlock-error").textContent = "";
+  show("page-unlock");
+}
+
+$("unlock-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const err = $("unlock-error"), btn = $("unlock-btn");
+  const auth = getAuth();
+  const pass = $("unlock-pass").value;
+  err.textContent = "";
+  if(!auth){ show("page-register"); return; }
+  if(!pass) return err.textContent = "Please enter your passcode.";
+
+  btn.disabled = true; btn.textContent = "Unlocking…";
+  try{
+    const hash = await pbkdf2(pass, auth.salt + ":auth", "hash");
+    if(hash !== auth.hash){
+      err.textContent = "That passcode doesn't match. Please try again.";
+      return;
+    }
+    journalKeyRaw = await pbkdf2(pass, auth.salt + ":data");
+    journalKey = await importKey(journalKeyRaw);
+    if($("unlock-remember").checked) rememberKey(); else forgetKey();
+    $("unlock-pass").value = "";
+    await routeUnlocked();
+  }finally{
+    btn.disabled = false; btn.textContent = "Unlock";
+  }
+});
+
+/* ---------- page 7: thank you ---------- */
+function showHome(){
+  const day = Math.min(Math.max(interventionDay(), 1), INTERVENTION_DAYS);
+  $("streak").textContent = "Streak " + day + " 🔥";
+  show("page-thanks");
+}
+
+/* ---------- page 4: daily intention ---------- */
+function formatMinutes(m){
+  const h = Math.floor(m / 60), min = m % 60;
+  return `${h}h ${String(min).padStart(2,"0")}m`;
+}
+function updateSlider(){
+  const s = $("intent-slider"), m = Number(s.value);
+  $("intent-value").textContent = formatMinutes(m);
+  s.setAttribute("aria-valuetext", formatMinutes(m).replace("h"," hours").replace("m"," minutes"));
+}
+let intentTouched = false;
+$("intent-slider").addEventListener("input", () => { intentTouched = true; updateSlider(); });
+
+function showIntention(){
+  $("intention-date").textContent = new Date().toLocaleDateString("en-GB",
+    {weekday:"long", day:"numeric", month:"long", year:"numeric"});
+  const t = ((journal && journal.intentions) || {})[todayLocal()];
+  $("intent-slider").value = t && !t.skipped ? t.minutes : 0;
+  intentTouched = false;
+  updateSlider();
+  show("page-intention");
+}
+
+async function saveIntention(entry, btn, label){
+  btn.disabled = true; btn.textContent = "Saving…";
+  try{
+    journal.intentions = journal.intentions || {};
+    journal.intentions[todayLocal()] = Object.assign(entry, {at: new Date().toISOString()});
+    await saveEncrypted(journal);
+    goToday();
+  }finally{
+    btn.disabled = false; btn.textContent = label;
+  }
+}
+$("intent-set").addEventListener("click", e =>
+  saveIntention({minutes: Number($("intent-slider").value)}, e.currentTarget, "Set my intention"));
+$("intent-skip").addEventListener("click", e =>
+  saveIntention({skipped: true}, e.currentTarget, "Skip for today"));
+
+/* ---------- page 5: what made you open the app ---------- */
+const REASON_OPTIONS = [
+  "For communication", "To connect with people", "To scroll", "Boredom",
+  "To look something up", "Out of habit", "Escape from reality", "Escape from worries"
+];
+REASON_OPTIONS.forEach(text => {
+  const b = document.createElement("button");
+  b.type = "button";
+  b.textContent = text;
+  b.setAttribute("aria-pressed", "false");
+  b.addEventListener("click", () =>
+    b.setAttribute("aria-pressed", b.getAttribute("aria-pressed") === "true" ? "false" : "true"));
+  $("reason-opts").appendChild(b);
+});
+$("reason-text").addEventListener("keydown", e => { if(e.key === "Enter"){ e.preventDefault(); e.target.blur(); } });
+
+let currentEntry = null; // this check-in, saved to the journal as it goes
+
+function showReason(){
+  if(!currentEntry){
+    $("reason-text").value = "";
+    document.querySelectorAll("#reason-opts button").forEach(b => b.setAttribute("aria-pressed","false"));
+    currentEntry = { at: new Date().toISOString(), reasonText: "", reasons: [], reasonSkipped: false, questions: [] };
+  }
+  show("page-reason");
+}
+
+async function finishReason(skipped){
+  currentEntry.reasonSkipped = skipped;
+  if(skipped){
+    currentEntry.reasonText = ""; currentEntry.reasons = [];
+  }else{
+    currentEntry.reasonText = $("reason-text").value.trim();
+    currentEntry.reasons = [...document.querySelectorAll('#reason-opts button[aria-pressed="true"]')].map(b => b.textContent);
+  }
+  journal.entries = journal.entries || [];
+  if(!journal.entries.includes(currentEntry)) journal.entries.push(currentEntry);
+  await saveEncrypted(journal);
+  await showReflection();
+}
+$("reason-done").addEventListener("click", () => finishReason(false));
+$("reason-skip").addEventListener("click", () => finishReason(true));
+
+/* ---------- page 6: reflective question ----------
+   Order: every participant sees the same fixed sequence. Round 1 uses the order
+   below; each later round uses its own fixed (seeded) shuffle, identical for everyone.
+   "Show me a different question" moves on to the next one in the sequence.
+*/
+
+// Hobbies/interests never suggested back to the participant (edit as needed)
+const PROBLEM_HOBBY = new RegExp("\\b(" + [
+  "alcohol","booze","beers?","wines?","vodka","whisk(e)?y","gin","rum","cocktails?","pubs?","drunk",
+  "drinking(?!\\s+(tea|coffee|water|juice|hot chocolate))",
+  "gambl\\w*","bet","betting","bets","casinos?","poker","slots?","lottery","scratch ?cards?","bingo",
+  "shop","shopping","online shopping","retail therapy","spend\\w* money",
+  "smok\\w*","vap\\w*","cigarettes?","cigs?","weed","cannabis","drugs?",
+  "porn\\w*","social media","instagram","insta","tiktok","snapchat","facebook","twitter","reddit",
+  "youtube","netflix","binge\\w*","scroll\\w*","gaming","video ?games?","games? on my phone"
+].join("|") + ")\\b", "i");
+
+const GENERIC_ACTIVITIES = [
+  "making yourself a warm drink and enjoying it by the window",
+  "reading a few pages of a book",
+  "a gentle stretch",
+  "tidying one small corner",
+  "jotting down passing thoughts or doodling in a notebook with a warm drink",
+  "having a glass of water"
+];
+
+const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+function pickTwo(arr){
+  const a = [...arr];
+  const i = Math.floor(Math.random() * a.length); const first = a.splice(i, 1)[0];
+  return [first, pick(a)];
+}
+// "Walking" -> "walking", but keep names/acronyms like "DIY" as they are
+const inSentence = s => (s.length > 1 && s[1] === s[1].toLowerCase()) ? s[0].toLowerCase() + s.slice(1) : s;
+const safeHobbies = () => (journal.hobbies || []).filter(h => !PROBLEM_HOBBY.test(h));
+
+function intentionText(){
+  const t = (journal.intentions || {})[todayLocal()];
+  if(!t || t.skipped) return null;
+  const h = Math.floor(t.minutes / 60), m = t.minutes % 60;
+  if(t.minutes === 0) return "no time";
+  const parts = [];
+  if(h) parts.push(h + (h === 1 ? " hour" : " hours"));
+  if(m) parts.push(m + " minutes");
+  return parts.join(" ");
+}
+
+// Each question: id + text(). Personalised ones fall back to a generic version
+// with the same wording when the participant hasn't given that information.
+const QUESTIONS = [
+  {id:"todo", text:() => "Is there any small task on your to-do list you could give five minutes to? Five minutes is often enough to get the ball rolling."},
+  {id:"feeling", text:() => "How are you feeling right now? Type as little or as much as you want. If you're feeling great, could doing a healthy activity keep up the greatness? If you're feeling down, is there someone you could directly reach out to?"},
+  {id:"body", text:() => "Is there something your body could use right now: water, food, a stretch, some rest?"},
+  {id:"goal", text:() => {
+    const g = journal.goals || [];
+    const start = g.length ? `You are working towards "${pick(g)}". Is there a small step you could take towards it before you scroll?`
+                           : "Is there something you are working towards? Is there a small step you could take towards it before you scroll?";
+    return start + " If now is not the right moment for that, is there another task you could give time to? Five minutes is enough to get the ball rolling.";
+  }},
+  {id:"walk", text:() => "How would having a short walk or a few minutes of fresh air feel instead of scrolling? Are you up for it?"},
+  {id:"oneThing", text:() => "What is one thing you would like to get done before your next scroll?"},
+  {id:"hobbiesTwo", text:() => {
+    const own = safeHobbies().map(inSentence);
+    let a, b;
+    if(own.length >= 2) [a, b] = pickTwo(own);
+    else if(own.length === 1){ a = own[0]; b = pick(GENERIC_ACTIVITIES); }
+    else [a, b] = pickTwo(GENERIC_ACTIVITIES);
+    return `Could a few minutes of ${a} or ${b} feel better than using a distracting app right now?`;
+  }},
+  {id:"wentWell", text:() => "What is one thing that has gone well today, however small it may be?"},
+  {id:"restOfDay", text:() => {
+    const it = intentionText();
+    return (it ? `Your intention for distracting apps today is about ${it}. ` : "")
+         + "What hobbies would you like to spend the rest of the day on?";
+  }},
+  {id:"howLong", text:() => "If you do open the app, how long would feel right this time?"},
+  {id:"nextHour", text:() => "What would make the next hour feel well spent?"},
+  {id:"wantMore", text:() => "What do you want more of today: rest, connection, progress or fun?"},
+  {id:"appGives", text:() => "What does the app give you in moments like this? Could something else give you that too?"},
+  {id:"onTrack", text:() => {
+    const it = intentionText();
+    return (it ? `Your intention for today is about ${it} on distracting apps. Do you feel on track with your intention so far?`
+               : "Do you feel on track with how you wanted to use your phone today?")
+         + " Regardless of how it's going, remember there's still time to make today meaningful.";
+  }},
+  {id:"endOfDay", text:() => "At the end of today, what action would make you glad you did it?"},
+  {id:"lastTime", text:() => {
+    const own = safeHobbies().map(inSentence);
+    return `When was the last time you made time for ${own.length ? pick(own) : pick(GENERIC_ACTIVITIES)}? Could today be a good day for it?`;
+  }},
+  {id:"tenMinutes", text:() => "What is one small thing you could do in the next ten minutes that would leave you feeling refreshed?"},
+  {id:"why", text:() => {
+    let w = (journal.why || "").trim().replace(/[.!\s]+$/, "");
+    if(!w) return "Think back to why you wanted to limit your screen time on distracting apps. Does that still feel true?";
+    if(w.length > 220) w = w.slice(0, 217).trimEnd() + "…";
+    return `You mentioned you wanted to limit your screen time on distracting apps because: "${w}". Does that still feel true?`;
+  }},
+  {id:"longScroll", text:() => "How do you normally feel after a long scroll? Is there something else you could do instead?"}
+];
+
+// Fixed, identical-for-everyone order for each round
+function seededRandom(seed){
+  return function(){
+    seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+    let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+const orderCache = {};
+function roundOrder(round){
+  if(orderCache[round]) return orderCache[round];
+  const order = QUESTIONS.map((_, i) => i);
+  if(round > 0){
+    const rnd = seededRandom(20261117 + round);
+    for(let i = order.length - 1; i > 0; i--){
+      const j = Math.floor(rnd() * (i + 1));
+      [order[i], order[j]] = [order[j], order[i]];
+    }
+    // never show the same question twice in a row across rounds
+    const prev = roundOrder(round - 1);
+    if(order[0] === prev[prev.length - 1]) [order[0], order[1]] = [order[1], order[0]];
+  }
+  return orderCache[round] = order;
+}
+
+let currentQuestion = null;
+
+async function nextQuestion(){
+  journal.qPos = journal.qPos || {round: 0, pos: 0};
+  const {round, pos} = journal.qPos;
+  const q = QUESTIONS[roundOrder(round)[pos]];
+  journal.qPos = pos + 1 >= QUESTIONS.length ? {round: round + 1, pos: 0} : {round, pos: pos + 1};
+  currentQuestion = {id: q.id, text: q.text(), round: round + 1, position: pos + 1};
+  currentEntry.questions.push({id: currentQuestion.id, text: currentQuestion.text, answer: null, status: "shown"});
+  await saveEncrypted(journal);
+  $("h-reflect").textContent = currentQuestion.text;
+  $("reflect-answer").value = "";
+}
+
+const SUPPORT_REASONS = ["Escape from reality", "Escape from worries"];
+
+async function showReflection(fromBack){
+  $("support-box").hidden = !currentEntry.reasons.some(r => SUPPORT_REASONS.includes(r));
+  const last = currentEntry.questions[currentEntry.questions.length - 1];
+  if(last){
+    $("h-reflect").textContent = last.text;
+    $("reflect-answer").value = last.answer || "";
+  }else{
+    await nextQuestion();
+  }
+  show("page-reflect", fromBack);
+}
+
+$("reflect-another").addEventListener("click", async () => {
+  const last = currentEntry.questions[currentEntry.questions.length - 1];
+  last.status = "changed";
+  await nextQuestion();
+  $("reflect-answer").focus();
+});
+
+async function finishReflection(skipped){
+  const last = currentEntry.questions[currentEntry.questions.length - 1];
+  const answer = $("reflect-answer").value.trim();
+  last.status = skipped ? "skipped" : (answer ? "answered" : "done-empty");
+  last.answer = !skipped && answer ? answer : null;
+  await saveEncrypted(journal);
+  checkIn = false;
+  showHome();
+}
+$("reflect-done").addEventListener("click", () => finishReflection(false));
+$("reflect-skip").addEventListener("click", () => finishReflection(true));
+$("reflect-ready").addEventListener("click", () => finishReflection(!$("reflect-answer").value.trim()));
+
+/* ---------- Next buttons ----------
+   Next keeps whatever the participant entered on the page; if they entered
+   nothing it counts as a skip (it never records an answer they didn't give).
+*/
+$("setup-next-pg").addEventListener("click", () => $("setup-save").click());
+$("intent-next-pg").addEventListener("click", () => {
+  const already = ((journal && journal.intentions) || {})[todayLocal()];
+  if(intentTouched) $("intent-set").click();
+  else if(already) goToday();
+  else $("intent-skip").click();
+});
+$("reason-next-pg").addEventListener("click", () => {
+  const any = $("reason-text").value.trim() || document.querySelector('#reason-opts button[aria-pressed="true"]');
+  finishReason(!any);
+});
+$("reflect-next-pg").addEventListener("click", () => finishReflection(!$("reflect-answer").value.trim()));
+
+// If the page was left open past midnight into day 8, close it when they come back
+document.addEventListener("visibilitychange", () => {
+  if(document.visibilityState === "visible" && interventionOver()) showEnded();
+});
+
+/* ---------- start-up ---------- */
+(async function init(){
+  // Delete everything on this phone once the retention date is reached
+  if(todayLocal() >= DELETE_AFTER){
+    ["pj_auth","pj_data","pj_theme","pj_days","pj_setup_sent","pj_outbox"].forEach(k => localStorage.removeItem(k));
+    forgetKey();
+    document.querySelector("main").innerHTML =
+      '<p class="brand">Pause Journal</p><h1>This study has ended</h1><p>Your journal has been permanently deleted. Thank you for taking part.</p>';
+    return;
+  }
+
+  const auth = getAuth();
+  if(!auth){ show(canRegisterToday() ? "page-register" : "page-closed"); return; }
+  if(interventionOver()){ showEnded(); return; }
+  flushQueue();
+  recordOpened();
+
+  checkIn = true;
+  const saved = await recallKey();
+  if(saved){
+    journalKey = saved;
+    $("unlock-remember").checked = true;
+    await routeUnlocked();
+  }else{
+    showUnlock();
+  }
+})();
+</script>
+</body>
+</html>
