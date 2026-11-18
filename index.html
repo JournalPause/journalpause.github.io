@@ -203,13 +203,13 @@
     <p class="hint" style="margin:-8px 0 18px">Everything here is optional, and only you can see it.</p>
 
     <div class="card">
-      <label for="hobby-input">Healthy habits I have or would like to try</label>
+      <label for="hobby-input">Healthy hobbies I have or would like to try</label>
       <form class="add-row" data-list="hobbies">
         <input id="hobby-input" type="text" enterkeyhint="done" placeholder="e.g. Going for a walk" maxlength="120">
-        <button type="submit" aria-label="Add habit">Add</button>
+        <button type="submit" aria-label="Add hobby">Add</button>
       </form>
-      <p class="hint">Add one habit at a time. Press enter or tap Add.</p>
-      <ul class="items" id="hobbies-list" aria-label="Your healthy habits"></ul>
+      <p class="hint">Add one hobby at a time. Press enter or tap Add.</p>
+      <ul class="items" id="hobbies-list" aria-label="Your hobbies"></ul>
     </div>
 
     <div class="card">
@@ -986,7 +986,7 @@ function intentionText(){
 const QUESTIONS = [
   {id:"todo", text:() => "Is there any small task on your to-do list you could give five minutes to? Five minutes is often enough to get the ball rolling."},
   {id:"feeling", text:() => "How are you feeling right now? Type as little or as much as you want. If you're feeling great, could doing a healthy activity keep up the greatness? If you're feeling down, is there someone you could directly reach out to?"},
-  {id:"body", text:() => "Is there something your body could use right now: water, food, a stretch, some rest?"},
+  {id:"body", text:() => "Is there something your body could use right now? Water, food, a stretch, some rest?"},
   {id:"goal", text:() => {
     const g = journal.goals || [];
     const start = g.length ? `You are working towards "${pick(g)}". Is there a small step you could take towards it before you scroll?`
@@ -1011,7 +1011,7 @@ const QUESTIONS = [
   }},
   {id:"howLong", text:() => "If you do open the app, how long would feel right this time?"},
   {id:"nextHour", text:() => "What would make the next hour feel well spent?"},
-  {id:"wantMore", text:() => "What do you want more of today: rest, connection, progress or fun?"},
+  {id:"wantMore", text:() => "What do you want more of today? Rest, connection, progress or fun?"},
   {id:"appGives", text:() => "What does the app give you in moments like this? Could something else give you that too?"},
   {id:"onTrack", text:() => {
     const it = intentionText();
